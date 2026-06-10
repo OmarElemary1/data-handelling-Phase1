@@ -1,0 +1,3 @@
+Python data handling starts with understanding files.
+CSV files are table-like.
+JSON files can contain nested structures.
