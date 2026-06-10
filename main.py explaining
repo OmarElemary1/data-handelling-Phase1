@@ -1,0 +1,271 @@
+import csv
+import json
+import sys
+import os
+
+
+# This function checks the file extension and decides what type of file it is.
+def detect_file_type(file_path):
+    # Split the file path into two parts:
+    # Example: "people.csv" becomes ("people", ".csv")
+    _, extension = os.path.splitext(file_path)
+
+    # Convert the extension to lowercase so ".CSV" and ".csv" are treated the same.
+    extension = extension.lower()
+
+    # Return a simple string representing the file type.
+    if extension == ".txt":
+        return "txt"
+    elif extension == ".csv":
+        return "csv"
+    elif extension == ".json":
+        return "json"
+    else:
+        # Return None if the file type is not supported.
+        return None
+
+
+# This function inspects CSV files.
+def inspect_csv(file_path):
+    # Open the CSV file in read mode.
+    with open(file_path, "r") as f:
+        # DictReader reads each row as a dictionary.
+        # The first row of the CSV is used as the dictionary keys.
+        reader = csv.DictReader(f)
+
+        # Convert the reader object into a list of dictionaries.
+        records = list(reader)
+
+        # Count the number of data rows in the CSV.
+        length = len(records)
+
+        # Get the column names from the CSV header.
+        col = reader.fieldnames
+
+        # Create a dictionary to store missing-value counts for each column.
+        missing_count = {}
+
+        # Start every column count at 0.
+        for column in col:
+            missing_count[column] = 0
+
+        # Loop through every row in the CSV.
+        for record in records:
+            # Loop through every column in the row.
+            for column in col:
+                # If the value is missing, increase that column's missing count.
+                if is_missing(record[column]):
+                    missing_count[column] += 1
+
+        # Print the CSV summary report.
+        print("File type: CSV")
+        print(f"Rows: {length}")
+        print(f"Columns: {len(col)}")
+        print(f"Column names: {', '.join(col)}")
+
+        # Print the first 3 rows as a preview.
+        print()
+        print("Preview:")
+        print_preview(records, col)
+
+        # Print the missing-value count for each column.
+        print()
+        print("Missing values:")
+        for column in col:
+            print(f"{column}: {missing_count[column]}")
+
+
+# This function inspects JSON files.
+def inspect_json(file_path):
+    # Open the JSON file in read mode.
+    with open(file_path, "r") as f:
+        try:
+            # Convert JSON text into Python data.
+            data = json.load(f)
+        except json.JSONDecodeError:
+            # If the JSON syntax is invalid, print an error and stop the function.
+            print("Error: Invalid JSON format.")
+            return
+
+        # The project only supports JSON shaped as a list of dictionaries.
+        # First, check that the whole JSON object is a list.
+        if not isinstance(data, list):
+            print("Error: JSON must be a list of dictionaries.")
+            return
+
+        # Second, check that every item inside the list is a dictionary.
+        for record in data:
+            if not isinstance(record, dict):
+                print("Error: JSON must be a list of dictionaries.")
+                return
+
+        # Print the JSON file type.
+        print("File type: JSON")
+
+        # Count how many records are inside the JSON list.
+        length = len(data)
+        print(f"Records: {length}")
+
+        # Collect all keys across all records.
+        # This is needed because JSON records may not all have the same keys.
+        keys = []
+
+        for record in data:
+            for key in record:
+                # Add the key only if it has not already been added.
+                if key not in keys:
+                    keys.append(key)
+
+        # Print all collected keys.
+        print(f"Keys: {', '.join(keys)}")
+
+        # Create a dictionary to store missing-value counts for each key.
+        missing_counts = {}
+
+        # Start every key count at 0.
+        for key in keys:
+            missing_counts[key] = 0
+
+        # Loop through every record and every possible key.
+        for record in data:
+            for key in keys:
+                # A JSON value is missing if:
+                # 1. the key does not exist in the record
+                # 2. the key exists but its value is empty, None, or only spaces
+                if key not in record or is_missing(record[key]):
+                    missing_counts[key] += 1
+
+        # Print the first 3 records as a preview.
+        print()
+        print("Preview:")
+        print_preview(data, keys)
+
+        # Print the missing-value count for each key.
+        print()
+        print("Missing values:")
+        for key in keys:
+            print(f"{key}: {missing_counts[key]}")
+
+
+# This function inspects TXT files.
+def inspect_txt(file_path):
+    # Open the text file in read mode.
+    with open(file_path, "r") as f:
+        # Read the entire file content as one string.
+        content = f.read()
+
+        # splitlines() separates the text into lines.
+        lines = content.splitlines()
+
+        # split() separates the text into words.
+        # It handles spaces, multiple spaces, tabs, and new lines.
+        words = content.split()
+
+        # Print the text file summary report.
+        print("File type: TXT")
+        print(f"Lines: {len(lines)}")
+        print(f"Words: {len(words)}")
+        print(f"Characters: {len(content)}")
+
+
+# This helper function checks whether a value should be treated as missing.
+def is_missing(value):
+    # None means missing.
+    if value is None:
+        return True
+
+    # Only strings can use .strip(), so we check the type first.
+    if isinstance(value, str):
+        # strip() removes spaces from the beginning and end.
+        # If the result is empty, the value is missing.
+        if value.strip() == "":
+            return True
+
+    # If none of the missing conditions are true, the value is not missing.
+    return False
+
+
+# This helper function prints the first few records in a readable format.
+def print_preview(records, keys, limit=3):
+    # n is used to number the preview rows.
+    n = 0
+
+    # Only preview the first few records.
+    # By default, limit is 3.
+    for record in records[:limit]:
+        n += 1
+
+        # Print the row number first.
+        print(f"{n}. ", end="")
+
+        # Loop through the keys with their index.
+        # enumerate() gives both the index and the key.
+        for i, key in enumerate(keys):
+            value = ""
+
+            # If the key does not exist in the record, show MISSING.
+            if key not in record:
+                value = "MISSING"
+
+            # If the key exists but the value is empty, show MISSING.
+            elif is_missing(record[key]):
+                value = "MISSING"
+
+            # Otherwise, use the actual value.
+            else:
+                value = record[key]
+
+            # Print a comma after every field except the last one.
+            if i < len(keys) - 1:
+                print(f"{key}={value}, ", end="")
+            else:
+                print(f"{key}={value}", end="")
+
+        # Move to a new line after finishing one record.
+        print("")
+
+
+# This is the main controller function.
+# It controls the flow of the whole program.
+def main():
+    # Check if the user provided exactly one file path.
+    # sys.argv[0] is the program name.
+    # sys.argv[1] should be the file path.
+    if len(sys.argv) != 2:
+        print("Error: Please provide a file path.")
+        print("Example: python data_inspector.py people.csv")
+        return
+
+    # Store the file path provided by the user.
+    file_path = sys.argv[1]
+
+    # Detect the file type using the extension.
+    file_type = detect_file_type(file_path)
+
+    # If the extension is unsupported, stop the program.
+    if file_type is None:
+        print("Error: Unsupported file type.")
+        print("Supported types: .csv, .json, .txt")
+        return
+
+    # Check whether the file actually exists.
+    if not os.path.exists(file_path):
+        print("Error: File not found.")
+        return
+
+    # Check whether the file is empty.
+    if os.path.getsize(file_path) == 0:
+        print("Error: File is empty.")
+        return
+
+    # Call the correct inspection function based on the detected file type.
+    if file_type == "csv":
+        inspect_csv(file_path)
+    elif file_type == "json":
+        inspect_json(file_path)
+    elif file_type == "txt":
+        inspect_txt(file_path)
+
+
+# Start the program by calling main().
+main()
